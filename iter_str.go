@@ -143,6 +143,40 @@ func (iter *Iterator) ReadStringAsSlice() (ret []byte) {
 	return
 }
 
+func (iter *Iterator) ReadRawString() (ret string) {
+	c := iter.nextToken()
+	if c == '"' {
+		start := iter.head // Start after the opening quote
+		for {
+			if iter.head >= iter.tail {
+				// Handle buffer refill if necessary
+				iter.ReportError("ReadRawString", "unexpected end of input")
+				return
+			}
+			c := iter.buf[iter.head]
+			iter.head++
+			if c == '"' {
+				// Return the raw string excluding the surrounding quotes
+				ret = string(iter.buf[start : iter.head-1])
+				return ret
+			} else if c == '\\' {
+				// Skip the next character (part of escape sequence)
+				if iter.head >= iter.tail {
+					iter.ReportError("ReadRawString", "unexpected end of input after escape character")
+					return
+				}
+				iter.head++
+			} else if c < ' ' {
+				iter.ReportError("ReadRawString",
+					fmt.Sprintf(`invalid control character found: %d`, c))
+				return
+			}
+		}
+	}
+	iter.ReportError("ReadRawString", `expects " but found `+string([]byte{c}))
+	return
+}
+
 func (iter *Iterator) readU4() (ret rune) {
 	for i := 0; i < 4; i++ {
 		c := iter.readByte()
